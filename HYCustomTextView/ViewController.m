@@ -37,15 +37,17 @@
     __weak __typeof(&*noticeLabel)weakNoticeLabel = noticeLabel;
     // 添加输入改变Block回调.
     [textView addTextDidChangeHandler:^(HYCustomTextView *textView) {
+        NSLog(@"文本输入改变回调");
         (textView.text.length < textView.maxLength) ? weakNoticeLabel.text = @"":NULL;
     }];
     // 添加到达最大限制Block回调.
     [textView addTextLengthDidMaxHandler:^(HYCustomTextView *textView) {
+        NSLog(@"文本输入达到最大值回调");
         weakNoticeLabel.text = [NSString stringWithFormat:@"最多限制输入%zi个字符", textView.maxLength];
     }];
 
     [textView addTextViewHeightDidChangeHandler:^(HYCustomTextView *textView) {
-        NSLog(@"高度变化");
+        NSLog(@"高度变化回调");
     }];
 }
 
