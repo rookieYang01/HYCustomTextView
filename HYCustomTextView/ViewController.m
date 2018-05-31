@@ -25,7 +25,7 @@
     
     // FSTextView
     HYCustomTextView *textView = [[HYCustomTextView alloc] initWithFrame:CGRectMake(15, 100, self.view.frame.size.width - 30, 30)];
-    textView.needLayoutHeight = YES;
+    textView.needAutoLayout = YES;
     textView.maxHeight = 100;
     textView.layer.borderColor = [UIColor blackColor].CGColor;
     textView.layer.borderWidth = 1.f;

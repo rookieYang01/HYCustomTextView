@@ -15,13 +15,10 @@ CGFloat const kFSTextViewPlaceholderHorizontalMargin = 6.0; ///< placeholder水�
 
 @property (nonatomic, copy) HYCustomTextViewHandler changeHandler; ///< 文本改变Block
 @property (nonatomic, copy) HYCustomTextViewHandler maxHandler; ///< 达到最大限制字符数Block
-@property (nonatomic, copy) HYCustomTextViewHandler frameChangeHandler; ///< 达到最大限制字符数Block
+@property (nonatomic, copy) HYCustomTextViewHandler frameChangeHandler; ///< 自适应高度改变block
 
-@property (nonatomic, assign) CGFloat               lastHeight;
-
-
-
-@property(nonatomic,strong) UILabel *placeholderLabel;
+@property (nonatomic, assign) CGFloat                lastTextViewHeight; /// 每次高度改变时记录 避免多次不必要绘制
+@property (nonatomic, strong) UILabel                *placeholderLabel; // 占位符
 
 @end
 
@@ -30,7 +27,6 @@ CGFloat const kFSTextViewPlaceholderHorizontalMargin = 6.0; ///< placeholder水�
 #pragma mark - Getter
 - (UILabel *)placeholderLabel {
     if (!_placeholderLabel) {
-        
         _placeholderLabel = [[UILabel alloc] init];
         _placeholderLabel.numberOfLines = 0;
         _placeholderLabel.translatesAutoresizingMaskIntoConstraints = NO;
@@ -40,7 +36,20 @@ CGFloat const kFSTextViewPlaceholderHorizontalMargin = 6.0; ///< placeholder水�
 
 
 - (void)dealloc {
+    
     [[NSNotificationCenter defaultCenter] removeObserver:self];
+    
+    if (self.changeHandler) {
+        self.changeHandler = nil;
+    }
+    
+    if (self.maxHandler) {
+        self.maxHandler = nil;
+    }
+    
+    if (self.frameChangeHandler) {
+        self.frameChangeHandler = nil;
+    }
 }
 
 - (instancetype)initWithFrame:(CGRect)frame {
@@ -67,15 +76,17 @@ CGFloat const kFSTextViewPlaceholderHorizontalMargin = 6.0; ///< placeholder水�
 #pragma mark - Private
 - (void)initialize {
     
+    /// 默认配置
     if (_maxLength == 0 || _maxLength == NSNotFound) {
         _maxLength = NSUIntegerMax;
     }
+    
+    self.minHeight = [self singleTextHeight];
     
     if (!_placeholderColor) {
         _placeholderColor = [UIColor colorWithRed:0.780 green:0.780 blue:0.804 alpha:1.000];
     }
     
-    // 基本设定 (需判断是否在Storyboard中设置了值)
     if (!self.backgroundColor) {
         self.backgroundColor = [UIColor whiteColor];
     }
@@ -84,7 +95,9 @@ CGFloat const kFSTextViewPlaceholderHorizontalMargin = 6.0; ///< placeholder水�
         self.font = [UIFont systemFontOfSize:15.f];
     }
     
-    self.scrollEnabled = NO;
+    if (self.needAutoLayout) {
+        self.scrollEnabled = NO;
+    }
     
     self.allowFirstStringEmpt = YES;
     
@@ -94,7 +107,6 @@ CGFloat const kFSTextViewPlaceholderHorizontalMargin = 6.0; ///< placeholder水�
     self.placeholderLabel.textColor = _placeholderColor;
     [self addSubview:self.placeholderLabel];
     
-    self.minHeight = [self singleTextHeight];
     
     // constraint
     [self addConstraint:[NSLayoutConstraint constraintWithItem:self.placeholderLabel
@@ -134,8 +146,9 @@ CGFloat const kFSTextViewPlaceholderHorizontalMargin = 6.0; ///< placeholder水�
     if (notification.object != self) return;
     // 根据字符数量显示或者隐藏 `placeholderLabel`
     self.placeholderLabel.hidden = [@(self.text.length) boolValue];
+    
     // 禁止第一个字符输入空格或者换行
-    if (self.allowFirstStringEmpt) {
+    if (self.allowFirstStringEmpt == NO) {
         if (self.text.length == 1) {
             if ([self.text isEqualToString:@" "] || [self.text isEqualToString:@"\n"]) {
                 self.text = @"";
@@ -146,47 +159,54 @@ CGFloat const kFSTextViewPlaceholderHorizontalMargin = 6.0; ///< placeholder水�
     // 限制字符数.
     if (_maxLength != NSUIntegerMax && _maxLength != 0 && self.text.length > 0) {
         if (!self.markedTextRange && self.text.length > _maxLength) {
-            !_maxHandler ?: _maxHandler(self); // 回调达到最大限制的Block.
-            self.text = [self.text substringToIndex:_maxLength]; // 截取最大限制字符数.
-            [self.undoManager removeAllActions]; // 达到最大字符数后清空所有 undoaction, 以免 undo 操作造成crash.
+            if (self.maxHandler) {
+                self.maxHandler(self);
+            }
+            // 截取最大限制字符数
+            self.text = [self.text substringToIndex:_maxLength];
+            // 达到最大字符数后清空所有 undoaction, 以免 undo 操作造成crash.
+            [self.undoManager removeAllActions];
         }
     }
     
-    if (self.needLayoutHeight) {
+    // 自适应高度
+    if (self.needAutoLayout) {
+        // 计算得出新文本size
         CGSize newSize = [self sizeThatFits:CGSizeMake(self.frame.size.width,MAXFLOAT)];
         CGFloat textViewH = newSize.height;
         
         if (self.maxHeight > self.minHeight && textViewH > self.maxHeight) {
             self.scrollEnabled = YES;
-            CGRect selfFrame = self.frame;
-            selfFrame.size = CGSizeMake(self.frame.size.width, self.maxHeight);
-            self.frame = selfFrame;            
+            [self layoutFrameWithHeight:self.maxHeight];
         }else {
-            // 设置为NO避免换行时bug
+            // 设置为NO避免换行显示问题
             self.scrollEnabled = NO;
             // 高度对比
-            if (self.lastHeight != textViewH) {
-                if (textViewH < self.minHeight) {
-                    CGRect selfFrame = self.frame;
-                    selfFrame.size.height = self.minHeight;
-                    self.frame = selfFrame;
-                }else {
-                    CGRect selfFrame = self.frame;
-                    selfFrame.size = CGSizeMake(self.frame.size.width, textViewH);
-                    self.frame = selfFrame;
-                }
-                self.lastHeight = textViewH;
+            if (self.lastTextViewHeight != textViewH) {
+                [self layoutFrameWithHeight:MAX(self.minHeight, textViewH)];
+                self.lastTextViewHeight = MAX(self.minHeight, textViewH);
+                
                 // 高度变化回调
-                !_frameChangeHandler?: _frameChangeHandler(self);
+                if (self.frameChangeHandler) {
+                    self.frameChangeHandler(self);
+                }
             }
         }
     }
     // 回调文本改变的Block.
-    !_changeHandler ?: _changeHandler(self);
+    if (self.changeHandler) {
+        self.changeHandler(self);
+    }
 }
 
+- (void)layoutFrameWithHeight:(CGFloat)height {
+    CGRect selfFrame = self.frame;
+    selfFrame.size = CGSizeMake(self.frame.size.width, height);
+    self.frame = selfFrame;
+}
+
+// 返回计算高度
 - (CGFloat)textViewHeight {
-    //---- 计算高度 ---- //
     CGSize size = CGSizeMake(self.frame.size.width, CGFLOAT_MAX);
     NSDictionary *dic = [NSDictionary dictionaryWithObjectsAndKeys:self.font,NSFontAttributeName, nil];
     CGFloat textHeight = [self.text boundingRectWithSize:size
@@ -196,8 +216,8 @@ CGFloat const kFSTextViewPlaceholderHorizontalMargin = 6.0; ///< placeholder水�
     return textHeight;
 }
 
+// 返回单个文字高度
 - (CGFloat)singleTextHeight {
-    //---- 计算高度 ---- //
     CGSize size = CGSizeMake(self.frame.size.width, CGFLOAT_MAX);
     NSDictionary *dic = [NSDictionary dictionaryWithObjectsAndKeys:self.font,NSFontAttributeName, nil];
     CGFloat textHeight = [@"单" boundingRectWithSize:size
@@ -209,7 +229,6 @@ CGFloat const kFSTextViewPlaceholderHorizontalMargin = 6.0; ///< placeholder水�
 
 
 #pragma mark - Setter
-
 - (void)setText:(NSString *)text {
     [super setText:text];
     self.placeholderLabel.hidden = [@(text.length) boolValue];
