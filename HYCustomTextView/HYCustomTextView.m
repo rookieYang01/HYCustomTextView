@@ -274,6 +274,15 @@ CGFloat const kFSTextViewPlaceholderHorizontalMargin = 6.0; ///< placeholder水�
     }
 }
 
+- (void)setMaxHeight:(CGFloat)maxHeight {
+    _maxHeight = maxHeight;
+    if (maxHeight < self.frame.size.height) {
+        CGRect selfFrame = self.frame;
+        selfFrame.size.height = maxHeight;
+        self.frame = selfFrame;
+    }
+}
+
 - (NSString *)formatText {
     return [[super text] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]]; // 去除首尾的空格和换行.
 }
