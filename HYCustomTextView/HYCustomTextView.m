@@ -81,8 +81,6 @@ CGFloat const kFSTextViewPlaceholderHorizontalMargin = 6.0; ///< placeholder水�
         _maxLength = NSUIntegerMax;
     }
     
-    self.minHeight = [self singleTextHeight];
-    
     if (!_placeholderColor) {
         _placeholderColor = [UIColor colorWithRed:0.780 green:0.780 blue:0.804 alpha:1.000];
     }
@@ -94,6 +92,8 @@ CGFloat const kFSTextViewPlaceholderHorizontalMargin = 6.0; ///< placeholder水�
     if (!self.font) {
         self.font = [UIFont systemFontOfSize:15.f];
     }
+    
+    self.minHeight = [self singleLineHeight];
     
     if (self.needAutoLayout) {
         self.scrollEnabled = NO;
@@ -140,6 +140,11 @@ CGFloat const kFSTextViewPlaceholderHorizontalMargin = 6.0; ///< placeholder水�
 }
 
 
+- (void)scrollToBottom {
+    CGPoint offset = CGPointMake(0,self.contentSize.height - self.frame.size.height);
+    [self setContentOffset:offset animated:NO];
+}
+
 #pragma mark - NSNotification
 - (void)textDidChange:(NSNotification *)notification {
     // 通知回调的实例的不是当前实例的话直接返回
@@ -174,7 +179,7 @@ CGFloat const kFSTextViewPlaceholderHorizontalMargin = 6.0; ///< placeholder水�
         // 计算得出新文本size
         CGSize newSize = [self sizeThatFits:CGSizeMake(self.frame.size.width,MAXFLOAT)];
         CGFloat textViewH = newSize.height;
-        
+        [self scrollToBottom];
         if (self.maxHeight > self.minHeight && textViewH > self.maxHeight) {
             self.scrollEnabled = YES;
             [self layoutFrameWithHeight:self.maxHeight];
@@ -185,7 +190,6 @@ CGFloat const kFSTextViewPlaceholderHorizontalMargin = 6.0; ///< placeholder水�
             if (self.lastTextViewHeight != textViewH) {
                 [self layoutFrameWithHeight:MAX(self.minHeight, textViewH)];
                 self.lastTextViewHeight = MAX(self.minHeight, textViewH);
-                
                 // 高度变化回调
                 if (self.frameChangeHandler) {
                     self.frameChangeHandler(self);
@@ -207,26 +211,15 @@ CGFloat const kFSTextViewPlaceholderHorizontalMargin = 6.0; ///< placeholder水�
 
 // 返回计算高度
 - (CGFloat)textViewHeight {
-    CGSize size = CGSizeMake(self.frame.size.width, CGFLOAT_MAX);
-    NSDictionary *dic = [NSDictionary dictionaryWithObjectsAndKeys:self.font,NSFontAttributeName, nil];
-    CGFloat textHeight = [self.text boundingRectWithSize:size
-                                                 options:NSStringDrawingUsesLineFragmentOrigin | NSStringDrawingUsesFontLeading
-                                              attributes:dic
-                                                 context:nil].size.height;
-    return textHeight;
+    
+    CGSize sizeThatFits = [self sizeThatFits:self.frame.size];
+    return sizeThatFits.height;
 }
 
-// 返回单个文字高度
-- (CGFloat)singleTextHeight {
-    CGSize size = CGSizeMake(self.frame.size.width, CGFLOAT_MAX);
-    NSDictionary *dic = [NSDictionary dictionaryWithObjectsAndKeys:self.font,NSFontAttributeName, nil];
-    CGFloat textHeight = [@"单" boundingRectWithSize:size
-                                            options:NSStringDrawingUsesLineFragmentOrigin | NSStringDrawingUsesFontLeading
-                                         attributes:dic
-                                            context:nil].size.height;
-    return textHeight;
+- (CGFloat)singleLineHeight {
+    
+    return (NSUInteger)(self.font.lineHeight * 1000) / 1000.f;
 }
-
 
 #pragma mark - Setter
 - (void)setText:(NSString *)text {
@@ -240,6 +233,11 @@ CGFloat const kFSTextViewPlaceholderHorizontalMargin = 6.0; ///< placeholder水�
 - (void)setFont:(UIFont *)font {
     [super setFont:font];
     self.placeholderLabel.font = font;
+    
+    CGFloat minHeight = [self singleLineHeight];
+    if (self.minHeight < minHeight) {
+        self.minHeight = minHeight;
+    }
 }
 
 - (void)setMaxLength:(NSUInteger)maxLength {
@@ -269,8 +267,8 @@ CGFloat const kFSTextViewPlaceholderHorizontalMargin = 6.0; ///< placeholder水�
 
 - (void)setMinHeight:(CGFloat)minHeight {
     _minHeight = minHeight;
-    if (minHeight < [self singleTextHeight]) {
-        _minHeight = [self singleTextHeight];
+    if (minHeight < [self singleLineHeight]) {
+        _minHeight = [self singleLineHeight];
     }
 }
 
@@ -298,6 +296,26 @@ CGFloat const kFSTextViewPlaceholderHorizontalMargin = 6.0; ///< placeholder水�
 // 设定文字高度发生改变时回调
 - (void)addTextViewHeightDidChangeHandler:(HYCustomTextViewHandler)changeHandler {
     _frameChangeHandler = [changeHandler copy];
+}
+
+- (void)setBounds:(CGRect)bounds {
+    [super setBounds:bounds];
+    if (self.contentSize.height <= self.bounds.size.height + 1){
+        self.contentOffset = CGPointZero; // Fix wrong contentOfset
+    } else if (!self.tracking) {
+        CGPoint offset = self.contentOffset;
+        if (offset.y  > self.contentSize.height - bounds.size.height) {
+            offset.y = self.contentSize.height - bounds.size.height;
+            if (!self.decelerating && !self.tracking && !self.dragging) {
+                self.contentOffset = offset;
+            }
+            // Fix wrong contentOfset when paster huge text
+        }
+    }
+}
+
+- (void)layoutSubviews {
+    [super layoutSubviews];
 }
 
 @end

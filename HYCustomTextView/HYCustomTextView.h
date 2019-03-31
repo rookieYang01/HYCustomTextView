@@ -40,11 +40,12 @@ typedef void(^HYCustomTextViewHandler)(HYCustomTextView *textView);
 
 /* 最小高度(最小设置需大于单行文字高度) **/
 @property (nonatomic, assign) CGFloat minHeight;
+
 /* 是否需要自适应高度 **/
-@property (nonatomic, assign) BOOL      needAutoLayout;
+@property (nonatomic, assign) BOOL       needAutoLayout;
 
 /* 最大高度 **/
-@property (nonatomic, assign) CGFloat maxHeight;
+@property (nonatomic, assign) CGFloat    maxHeight;
 
 
 
