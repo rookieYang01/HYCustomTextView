@@ -54,6 +54,7 @@ CGFloat const kFSTextViewPlaceholderHorizontalMargin = 6.0; ///< placeholder姘村
 
 - (instancetype)initWithFrame:(CGRect)frame {
     if (self = [super initWithFrame:frame]) {
+
         [self initialize];
     }
     return self;
@@ -75,6 +76,8 @@ CGFloat const kFSTextViewPlaceholderHorizontalMargin = 6.0; ///< placeholder姘村
 
 #pragma mark - Private
 - (void)initialize {
+    
+    self.needAutoLayout = YES;
     
     /// 榛樿閰嶇疆
     if (_maxLength == 0 || _maxLength == NSNotFound) {
@@ -106,8 +109,7 @@ CGFloat const kFSTextViewPlaceholderHorizontalMargin = 6.0; ///< placeholder姘村
     self.placeholderLabel.text = _placeholder;
     self.placeholderLabel.textColor = _placeholderColor;
     [self addSubview:self.placeholderLabel];
-    
-    
+        
     // constraint
     [self addConstraint:[NSLayoutConstraint constraintWithItem:self.placeholderLabel
                                                      attribute:NSLayoutAttributeTop
@@ -137,6 +139,8 @@ CGFloat const kFSTextViewPlaceholderHorizontalMargin = 6.0; ///< placeholder姘村
                                                      attribute:NSLayoutAttributeHeight
                                                     multiplier:1.0
                                                       constant:-kFSTextViewPlaceholderVerticalMargin*2]];
+    
+    self.text = @"";
 }
 
 
